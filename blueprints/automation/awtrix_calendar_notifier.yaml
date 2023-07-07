@@ -87,7 +87,7 @@ blueprint:
               value: "2"
           custom_value: false
           multiple: false
-  source_url: https://raw.githubusercontent.com/jeeftor/HomeAssistant/master/blueprints/automation/awtrix_battery_monitor.yaml
+  source_url: https://raw.githubusercontent.com/Brunas/HomeAssistant/master/blueprints/automation/awtrix_calendar_notifier.yaml
   
 mode: single
 
