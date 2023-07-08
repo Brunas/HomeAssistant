@@ -110,7 +110,7 @@ variables:
   lifetime: !input lifetime
   push_icon: !input push_icon
   payload_internal: 
-    "{\"icon\":\"{{icon}}\",\n    \"text\":\"{{state_attr(calendar,message_attr_name)}}\",\n    \"pushIcon\":\"{{push_icon}}\",\n
+    "{\"icon\":\"{{icon}}\",\n    \"text\":\"{{state_attr(calendar,start_time_attr_name)}}: {{state_attr(calendar,message_attr_name)}}\",\n    \"pushIcon\":\"{{push_icon}}\",\n
         \"repeat\":1,\"textCase\":2,\"textOffset\":33,\"duration\":{{duration}},\"lifetime\":{{lifetime}}}"
   payload:
     '{{ iif(now() >= state_attr(calendar,start_time_attr_name)| as_datetime | default(now(), true)|as_local
