@@ -3,9 +3,13 @@ blueprint:
   description:
     "This blueprint will print notification when calendar event happens. 
 
-     Google calendar integration https://www.home-assistant.io/integrations/google was used for initial testing. 
+     Google calendar integration https://www.home-assistant.io/integrations/google was used for initial testing. Other calendars might work too.
      
-     Other calendars might work too."
+     Any icons can be used to describe calendar events. Upload them to AWTRIX ICONS folder and make sure your event title is mapped to them in icon map setting of your automation. I've used trash bins of various colours to remind me about need to take appropriate bin to the street :).
+
+     Inspired by awesome work of Jeeftor
+    "
+
   domain: automation
   input:
     awtrix:
