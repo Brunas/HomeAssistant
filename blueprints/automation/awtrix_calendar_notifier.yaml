@@ -65,6 +65,9 @@ blueprint:
         text: 
           multiline: true
       default: "{\"light green bin\":\"trash_light_green\",\"green bin\":\"trash_green\",\"blue bin\":\"trash_blue\"}"
+    notification_sound:
+      name: Notification Sound
+      default: 'alert'
     duration:
       name: Duration (in seconds)
       description: Sets how long the app or notification should be displayed.
@@ -93,9 +96,6 @@ blueprint:
               value: "2"
           custom_value: false
           multiple: false
-    notification_sound:
-      name: Notification Sound
-      default: 'alert'
   source_url: https://raw.githubusercontent.com/Brunas/HomeAssistant/master/blueprints/automation/awtrix_calendar_notifier.yaml
   
 mode: single
@@ -115,6 +115,7 @@ variables:
   hours_before: !input hours_before
   icon_map: !input icon_map
   icon: "{%- set icon_map_json = icon_map|from_json %} {{icon_map_json[state_attr(calendar,message_attr_name)]}}"
+  notification_sound: !input notification_sound
   duration: !input duration
   lifetime: !input lifetime
   push_icon: !input push_icon
