@@ -6,6 +6,8 @@ blueprint:
      [Google calendar integration](https://www.home-assistant.io/integrations/google) was used for initial testing. Other calendars might work too.
      
      Any icons can be used to describe calendar events. Upload them to AWTRIX ICONS folder and make sure your event title is mapped to them in icon map setting of your automation. I've used trash bins of various colours to remind me about need to take appropriate bin to the street :).
+
+     Sounds are also supported. Separate map should be populated to make it work. If no sounds are set, obviously no sound is triggered. Make sure configured sounds are uploaded to AWTRIX MELODIES folder. More details are [here](https://blueforcer.github.io/awtrix-light/#/sounds)
  
      Message is shown every 5 minutes in interval from configurable amount of hours before event start time till event start.
 
@@ -65,6 +67,13 @@ blueprint:
         text: 
           multiline: true
       default: "{\"light green bin\":\"trash_light_green\",\"green bin\":\"trash_green\",\"blue bin\":\"trash_blue\"}"
+    sound_map:
+      name: An event message-to-sound name map
+      description: An event message-to-sound name map in JSON format
+      selector:
+        text: 
+          multiline: true
+      default: "{\"light green bin\":\"mahna\"}"
     duration:
       name: Duration (in seconds)
       description: Sets how long the app or notification should be displayed.
@@ -111,12 +120,14 @@ variables:
   start_time_attr_name: !input start_time_attr_name
   hours_before: !input hours_before
   icon_map: !input icon_map
+  sound_map: !input sound_map
   icon: "{%- set icon_map_json = icon_map|from_json %} {{icon_map_json[state_attr(calendar,message_attr_name)]}}"
+  sound: "{%- set sound_map_json = sound_map|from_json %} {{sound_map_json[state_attr(calendar,message_attr_name)]}}"
   duration: !input duration
   lifetime: !input lifetime
   push_icon: !input push_icon
   payload_internal: 
-    "{\"icon\":\"{{icon}}\",\n    \"text\":\"{{state_attr(calendar,start_time_attr_name)}} {{state_attr(calendar,message_attr_name)}}\",\n    \"pushIcon\":\"{{push_icon}}\",\n
+    "{\"icon\":\"{{icon}}\",\"sound\":\"{{sound}}\"\n    \"text\":\"{{state_attr(calendar,start_time_attr_name)}} {{state_attr(calendar,message_attr_name)}}\",\n    \"pushIcon\":\"{{push_icon}}\",\n
         \"repeat\":1,\"textCase\":2,\"textOffset\":33,\"duration\":{{duration}},\"lifetime\":{{lifetime}}}"
   payload:
     '{{ iif(now() >= state_attr(calendar,start_time_attr_name)| as_datetime | default(now(), true)|as_local
