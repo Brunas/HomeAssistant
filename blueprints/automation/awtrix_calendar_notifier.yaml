@@ -121,8 +121,8 @@ variables:
   hours_before: !input hours_before
   icon_map: !input icon_map
   sound_map: !input sound_map
-  icon: "{%- set icon_map_json = icon_map|from_json %} {{icon_map_json[state_attr(calendar,message_attr_name)]}}"
-  sound: "{%- set sound_map_json = sound_map|from_json %} {{sound_map_json[state_attr(calendar,message_attr_name)]}}"
+  icon: "{%- set icon_map_json = icon_map|from_json %} {%if icon_map_json[state_attr(calendar,message_attr_name)] is defined %}{{icon_map_json[state_attr(calendar,message_attr_name)]}}{% endif %}"
+  sound: "{%- set sound_map_json = sound_map|from_json %} {%if sound_map_json[state_attr(calendar,message_attr_name)] is defined %}{{sound_map_json[state_attr(calendar,message_attr_name)]}}{% endif %}"
   duration: !input duration
   lifetime: !input lifetime
   push_icon: !input push_icon
