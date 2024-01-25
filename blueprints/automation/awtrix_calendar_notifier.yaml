@@ -1,17 +1,17 @@
 blueprint:
   name: "AWTRIX Calendar Notifier"
   description:
-    "This blueprint will print notification when calendar event happens. 
+    "This blueprint will print notification when calendar event happens.
 
-     [Google calendar integration](https://www.home-assistant.io/integrations/google) was used for initial testing. Other calendars might work too.
-     
-     Any icons can be used to describe calendar events. Upload them to AWTRIX ICONS folder and make sure your event title is mapped to them in icon map setting of your automation. I've used trash bins of various colours to remind me about need to take appropriate bin to the street :).
+    [Google calendar integration](https://www.home-assistant.io/integrations/google) was used for initial testing. Other calendars might work too.
 
-     Sounds are also supported. Separate map should be populated to make it work. If no sounds are set, obviously no sound is triggered. Make sure configured sounds are uploaded to AWTRIX MELODIES folder. More details are [here](https://blueforcer.github.io/awtrix-light/#/sounds)
- 
-     Message is shown every 5 minutes in interval from configurable amount of hours before event start time till event start.
+    Any icons can be used to describe calendar events. Upload them to AWTRIX ICONS folder and make sure your event title is mapped to them in icon map setting of your automation. I've used trash bins of various colours to remind me about need to take appropriate bin to the street :).
 
-     Inspired by awesome work of Jeeftor
+    Sounds are also supported. Separate map should be populated to make it work. If no sounds are set, obviously no sound is triggered. Make sure configured sounds are uploaded to AWTRIX MELODIES folder. More details are [here](https://blueforcer.github.io/awtrix-light/#/sounds)
+
+    Message is shown every 5 minutes in interval from configurable amount of hours before event start time till event start.
+
+    Inspired by awesome work of Jeeftor
     "
 
   domain: automation
@@ -64,16 +64,24 @@ blueprint:
       name: An event message-to-icon name map
       description: An event message-to-icon name map in JSON format
       selector:
-        text: 
+        text:
           multiline: true
-      default: "{\"light green bin\":\"trash_light_green\",\"green bin\":\"trash_green\",\"blue bin\":\"trash_blue\"}"
+      default: '{"light green bin":"trash_light_green","green bin":"trash_green","blue bin":"trash_blue"}'
+    default_icon:
+      name: A default icon name
+      description: A default icon name used in case when event is not defined in icon_map. Default - empty.
+      default: ""
     sound_map:
       name: An event message-to-sound name map
       description: An event message-to-sound name map in JSON format
       selector:
-        text: 
+        text:
           multiline: true
-      default: "{\"light green bin\":\"mahna\"}"
+      default: '{"light green bin":"mahna"}'
+    default_sound:
+      name: A default sould name
+      description: A default sound name used in case when event is not defined in sound_map. Default - empty.
+      default: ""
     duration:
       name: Duration (in seconds)
       description: Sets how long the app or notification should be displayed.
@@ -103,7 +111,7 @@ blueprint:
           custom_value: false
           multiple: false
   source_url: https://raw.githubusercontent.com/Brunas/HomeAssistant/master/blueprints/automation/awtrix_calendar_notifier.yaml
-  
+
 mode: single
 
 variables:
@@ -120,23 +128,25 @@ variables:
   start_time_attr_name: !input start_time_attr_name
   hours_before: !input hours_before
   icon_map: !input icon_map
+  default_icon: !input default_icon
   sound_map: !input sound_map
-  icon: "{%- set icon_map_json = icon_map|from_json %} {%if icon_map_json[state_attr(calendar,message_attr_name)] is defined %}{{icon_map_json[state_attr(calendar,message_attr_name)]}}{% endif %}"
-  sound: "{%- set sound_map_json = sound_map|from_json %} {%if sound_map_json[state_attr(calendar,message_attr_name)] is defined %}{{sound_map_json[state_attr(calendar,message_attr_name)]}}{% endif %}"
+  default_sound: !input default_sound
+  icon: "{%- set icon_map_json = icon_map|from_json %} {%if icon_map_json[state_attr(calendar,message_attr_name)] is defined %}{{icon_map_json[state_attr(calendar,message_attr_name)]}}{% else %}{{default_icon}}{% endif %}"
+  sound: "{%- set sound_map_json = sound_map|from_json %} {%if sound_map_json[state_attr(calendar,message_attr_name)] is defined %}{{sound_map_json[state_attr(calendar,message_attr_name)]}}{% else %}{{default_sound}}{% endif %}"
   duration: !input duration
   lifetime: !input lifetime
   push_icon: !input push_icon
-  payload_internal: 
-    "{\"icon\":\"{{icon}}\",\"sound\":\"{{sound}}\"\n    \"text\":\"{{state_attr(calendar,start_time_attr_name)}} {{state_attr(calendar,message_attr_name)}}\",\n    \"pushIcon\":\"{{push_icon}}\",\n
-        \"repeat\":1,\"textCase\":2,\"textOffset\":33,\"duration\":{{duration}},\"lifetime\":{{lifetime}}}"
+  payload_internal:
+    "{\"icon\":\"{{icon}}\",\"sound\":\"{{sound}}\",\n    \"text\":\"{{state_attr(calendar,start_time_attr_name)}} {{state_attr(calendar,message_attr_name)}}\",\n    \"pushIcon\":\"{{push_icon}}\",\n
+    \"repeat\":1,\"textCase\":2,\"textOffset\":33,\"duration\":{{duration}},\"lifetime\":{{lifetime}}}"
   payload:
     '{{ iif(now() >= state_attr(calendar,start_time_attr_name)| as_datetime | default(now(), true)|as_local
     - timedelta(hours = hours_before), payload_internal, "{}") }}'
-    
+
 trigger:
   - platform: time_pattern
     minutes: /5
-    
+
 condition: []
 
 action:
