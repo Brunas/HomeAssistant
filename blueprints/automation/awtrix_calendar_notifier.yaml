@@ -11,12 +11,15 @@ blueprint:
     your automation. I've used trash bins of various colours to remind me about need
     to take appropriate bin to the street :).
 
+    Message is shown every 5 minutes in interval from configurable amount of hours
+    before event start time till event start.
+
     Sounds are also supported. Separate map should be populated to make it work. If
     no sounds are set, obviously no sound is triggered. Make sure configured sounds
     are uploaded to AWTRIX MELODIES folder. More details are [here](https://blueforcer.github.io/awtrix3/#/sounds)
 
-    Message is shown every 5 minutes in interval from configurable amount of hours
-    before event start time till event start.
+    Sound is sent using separate topic every 5 minutes from the event start time till event end time
+    which suggests to provide more care with event scheduling :)
 
     Inspired by awesome work of Jeeftor "
   domain: automation
@@ -145,7 +148,7 @@ variables:
     {%- set ns = namespace(devices=[]) %}
     {%- for device_id in device_ids %}
     {%- set device=get_device_topic(device_id)|replace(' ','') %}
-    {% set ns.devices = ns.devices + [ device ~ '/custom/' ~ app_name] %}
+    {% set ns.devices = ns.devices + [ device ] %}
     {%- endfor %}
     {{ ns.devices | reject('match','unavailable') | list}}
 
@@ -177,13 +180,15 @@ variables:
   lifetime: !input lifetime
   push_icon: !input push_icon
   payload_internal:
-    "{\"icon\":\"{{icon}}\",\"sound\":\"{{sound}}\",\n    \"text\":\"{{state_attr(calendar,start_time_attr_name)}}
+    "{\"icon\":\"{{icon}}\",\n    \"text\":\"{{state_attr(calendar,start_time_attr_name)}}
     {{state_attr(calendar,message_attr_name)}}\",\n    \"pushIcon\":\"{{push_icon}}\",\n
     \"repeat\":1,\"textCase\":2,\"textOffset\":33,\"duration\":{{duration}},\"lifetime\":{{lifetime}}}"
-  payload:
-    '{{ iif(now() >= state_attr(calendar,start_time_attr_name)| as_datetime
-    | default(now(), true)|as_local - timedelta(hours = hours_before), payload_internal,
-    "{}") }}'
+  payload: >-
+    {%- set event_timestamp = state_attr(calendar,start_time_attr_name)| as_datetime | default(now(), true)|as_local %}
+    {{ iif(now() >= event_timestamp - timedelta(hours = hours_before), payload_internal, "{}") }}
+  sound_payload: >-
+    {%- set event_timestamp = state_attr(calendar,start_time_attr_name)| as_datetime | default(now(), true)|as_local %}
+    {{ iif(now() >=  event_timestamp - timedelta(minutes = 5), '{"sound":"' ~ sound ~ '"}', "{}") }}
 trigger:
   - platform: time_pattern
     minutes: /5
@@ -196,5 +201,11 @@ action:
           data:
             qos: 0
             retain: false
-            topic: "{{ repeat.item }}"
+            topic: "{{ repeat.item }}/custom/{{app_name}}"
             payload: "{{payload}}"
+        - service: mqtt.publish
+          data:
+            qos: 0
+            retain: false
+            topic: "{{ repeat.item }}/sound"
+            payload: "{{sound_payload}}"
