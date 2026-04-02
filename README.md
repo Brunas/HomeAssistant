@@ -10,7 +10,7 @@ Sends notification about upcoming calendar event to your AWTRIX lite device. I'v
 
 ## AWTRIX Electricity Prices
 
-This blueprint displays real-time electricity prices on an **AWTRIX (Ulanzi TC001)** clock with high-resolution detail. Unlike standard hourly displays, this automation uses **15-minute interval data** to provide a more precise look at price fluctuations.
+This blueprint displays real-time electricity prices on an AWTRIX lite clock with high-resolution detail. Unlike standard hourly displays, this automation uses **15-minute interval data** to provide a more precise look at price fluctuations.
 
 **Key Features:**
 
@@ -21,8 +21,12 @@ This blueprint displays real-time electricity prices on an **AWTRIX (Ulanzi TC00
 * **Efficient MQTT Handling:** Pre-calculates the entire JSON payload as a single string to avoid Home Assistant template errors.
 
 Following template sensors need to be defined to retrieve Nordpool prices in 15-minute intervals:
-    1. Get YOUR_CONFIG_ENTRY_ID in developer tools while trying to execute `nordpool.get_prices_for_date` and turning on YAML view
-    2. Change `0.15409`, `0.09601` and `1.21` to your providers daylight margin, night margin and VAT multiplier in your. Margins include VAT already.
+
+1. Get YOUR_CONFIG_ENTRY_ID in developer tools while trying to execute `nordpool.get_prices_for_date` and turning on YAML view
+
+2. Change `0.15409`, `0.09601` and `1.21` to your providers daylight margin, night margin and VAT multiplier respectively. 
+
+>**NOTE**: Margins include VAT already.
 
 ```yaml
 template:
