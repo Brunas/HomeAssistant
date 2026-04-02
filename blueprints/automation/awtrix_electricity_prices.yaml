@@ -1,0 +1,273 @@
+blueprint:
+  name: "AWTRIX Electricity Prices 15m"
+  description: |
+    **Nordpool 15-Minute Sliding Window Power Graph**
+
+    This blueprint displays real-time electricity prices on an **AWTRIX (Ulanzi TC001)** clock with high-resolution detail. Unlike standard hourly displays, this automation uses **15-minute interval data** to provide a more precise look at price fluctuations.
+
+    **Key Features:**
+    * **Sliding 6-Hour Window:** The graph doesn't reset at midnight; instead, the first pixel ($x=8$) always represents the **current 15-minute price**, followed by 23 pixels showing the next **5 hours and 45 minutes** of upcoming prices.
+    * **Today & Tomorrow Integration:** Automatically merges data from "Today" and "Tomorrow" sensors to ensure the graph remains full even late in the evening.
+    * **Dynamic Color Gradient:** The main text and every individual pixel in the graph are color-coded based on your custom price thresholds (e.g., Green for cheap, Red for expensive), with smooth color interpolation for the main text.
+    * **Precision Indexing:** Uses a mathematical offset (Hour x 4 + Minute / 15) to ensure the display perfectly syncs with the current 15-minute billing slot.
+    * **Efficient MQTT Handling:** Pre-calculates the entire JSON payload as a single string to avoid Home Assistant template errors.
+
+    Following template sensors need to be defined to retrieve Nordpool prices in 15-minute intervals:
+
+    ```yaml
+    template:
+      - trigger:
+          - platform: time_pattern
+            hours: "/1"
+          - platform: homeassistant
+            event: start
+        action:
+          - action: nordpool.get_prices_for_date
+            data:
+              config_entry: "Your_Config_Entry_ID"
+              date: "{{ now().date() }}"
+            response_variable: today_raw
+          - action: nordpool.get_prices_for_date
+            data:
+              config_entry: "Your_Config_Entry_ID"
+              date: "{{ (now() + timedelta(days=1)).date() }}"
+            response_variable: tomorrow_raw
+        sensor:
+          - name: "Electricity Prices Today"
+            unique_id: "electricity_prices_today"
+            state: "{{ now().strftime('%Y-%m-%d') }}"
+            attributes:
+              prices: >
+                {% set day_m = 0.15409 %}
+                {% set night_m = 0.09601 %}
+                {% set ns = namespace(items=[]) %}
+                {% set raw_list = today_raw.get('LT', []) %}
+                {% if raw_list | count > 0 %}
+                  {% for item in raw_list %}
+                    {% set dt = as_datetime(item.start) %}
+                    {% set hour = dt.hour %}
+                    {% set is_weekend = dt.isoweekday() >= 6 %}
+                    {% set base_with_vat = (item.price / 1000) * 1.21 %}
+                    {% if is_weekend %}
+                      {% set p = base_with_vat + night_m %}
+                    {% else %}
+                      {% if hour >= 7 and hour < 22 %}
+                        {% set p = base_with_vat + day_m %}
+                      {% else %}
+                        {% set p = base_with_vat + night_m %}
+                      {% endif %}
+                    {% endif %}
+                    {% set ns.items = ns.items + [p | round(3)] %}
+                  {% endfor %}
+                {% endif %}
+                {{ ns.items }}
+          - name: "Electricity Prices Tomorrow"
+            unique_id: "electricity_prices_tomorrow"
+            state: "{{ (now() + timedelta(days=1)).strftime('%Y-%m-%d') }}"
+            attributes:
+              prices: >
+                {% set day_m = 0.15409 %}
+                {% set night_m = 0.09601 %}
+                {% set ns = namespace(items=[]) %}
+                {% set raw_list = tomorrow_raw.get('LT', []) %}
+
+                {% if raw_list | count > 0 %}
+                  {% for item in raw_list %}
+                    {% set dt = as_datetime(item.start) %}
+                    {% set hour = dt.hour %}
+                    {% set is_weekend = dt.isoweekday() >= 6 %}
+                    {% set base_with_vat = (item.price / 1000) * 1.21 %}
+                    
+                    {% if is_weekend %}
+                      {% set p = base_with_vat + night_m %}
+                    {% else %}
+                      {% if hour >= 7 and hour < 22 %}
+                        {% set p = base_with_vat + day_m %}
+                      {% else %}
+                        {% set p = base_with_vat + night_m %}
+                      {% endif %}
+                    {% endif %}
+                    {% set ns.items = ns.items + [p | round(3)] %}
+                  {% endfor %}
+                {% endif %}
+                {{ ns.items }}
+
+    ```
+    Based on an outdated Nordpool blueprint.
+  domain: automation
+  author: "Brunas"
+  input:
+    awtrix:
+      name: AWTRIX Device
+      selector:
+        device:
+          integration: mqtt
+          manufacturer: Blueforcer
+          model: AWTRIX Light
+          multiple: true
+    prices_today:
+      name: Prices Today Sensor
+      selector:
+        entity:
+          domain: sensor
+    prices_tomorrow:
+      name: Prices Tomorrow Sensor
+      selector:
+        entity:
+          domain: sensor
+    price_attribute:
+      name: Prices Attribute
+      selector:
+        text: {}
+      default: "prices"
+    unit:
+      name: Unit
+      selector:
+        text: {}
+      default: "c"
+    unit_multiplier:
+      name: Multiplier
+      selector:
+        number:
+          min: 1
+          max: 1000
+      default: 100
+    color_matrix_json:
+      name: Color Map
+      selector:
+        text:
+          multiline: true
+      default: |
+        {
+          "0": "#00FF00",
+          "10": "#FFFF00",
+          "20": "#FF8000",
+          "40": "#FF0000"
+        }
+    message_duration:
+      name: Duration
+      selector:
+        number:
+          min: 0
+          max: 300
+          unit_of_measurement: sec
+          mode: slider
+      default: 15
+    icon:
+      name: Icon
+      selector:
+        text: {}
+      default: "54077"
+
+mode: restart
+
+trigger:
+  - platform: time_pattern
+    minutes: "/15"
+  - platform: state
+    entity_id: !input prices_today
+  - platform: state
+    entity_id: !input prices_tomorrow
+  - platform: homeassistant
+    event: start
+
+variables:
+  today_id: !input prices_today
+  tomorrow_id: !input prices_tomorrow
+  multiplier: !input unit_multiplier
+  price_attr: !input price_attribute
+  color_map_raw: !input color_matrix_json
+  device_ids: !input awtrix
+  unit_text: !input unit
+  icon_id: !input icon
+  duration_time: !input message_duration
+
+  devices_topics: >-
+    {% set ns = namespace(topics=[]) %}
+    {% for dev_id in device_ids %}
+      {% set t_ent = device_entities(dev_id) | select('search','device_topic') | list %}
+      {% if t_ent | length > 0 %}
+        {% set base = states(t_ent[0]) %}
+        {% if base and base != 'unknown' %}
+          {% set ns.topics = ns.topics + [ base ~ '/custom/electricity_prices' ] %}
+        {% endif %}
+      {% endif %}
+    {% endfor %}
+    {{ ns.topics }}
+
+  final_payload: >-
+    {% set today_list = state_attr(today_id, price_attr) or [] %}
+    {% set tom_list = state_attr(tomorrow_id, price_attr) or [] %}
+    {% set full_list = today_list + tom_list %}
+
+    {# Precise Indexing: 4 intervals per hour #}
+    {% set current_idx = (now().hour * 4) + (now().minute // 15) | int %}
+
+    {# Pulling data from the calculated index #}
+    {% set raw_now = full_list[current_idx] if current_idx < full_list | length else 0 %}
+    {% set val_now = (raw_now.value if raw_now is mapping else raw_now) | float(0) %}
+    {% set price = (val_now * multiplier) | round(2) %}
+
+    {% set d = color_map_raw | from_json %}
+    {% set ns_c = namespace(items=[]) %}
+    {% for k, v in d.items() %}
+      {% set ns_c.items = ns_c.items + [{"p": k|float, "c": v}] %}
+    {% endfor %}
+    {% set colors = ns_c.items | sort(attribute='p') %}
+
+    {% set current_color = "#FFFFFF" %}
+    {% if colors | length > 0 %}
+      {% if price <= colors[0].p %}
+        {% set current_color = colors[0].c %}
+      {% elif price >= colors[-1].p %}
+        {% set current_color = colors[-1].c %}
+      {% else %}
+        {% set low = colors | selectattr('p', 'lt', price) | list | last %}
+        {% set high = colors | selectattr('p', 'ge', price) | list | first %}
+        {% set ratio = (price - low.p) / (high.p - low.p) %}
+        {% set c1 = low.c[1:] %}
+        {% set c2 = high.c[1:] %}
+        {% set r = (c1[0:2]|int(base=16) + ratio * (c2[0:2]|int(base=16) - c1[0:2]|int(base=16))) | int %}
+        {% set g = (c1[2:4]|int(base=16) + ratio * (c2[2:4]|int(base=16) - c1[2:4]|int(base=16))) | int %}
+        {% set b = (c1[4:6]|int(base=16) + ratio * (c2[4:6]|int(base=16) - c1[4:6]|int(base=16))) | int %}
+        {% set current_color = '#%02X%02X%02X' | format(r, g, b) %}
+      {% endif %}
+    {% endif %}
+
+    {% set ns_draw = namespace(pixels=[]) %}
+    {% for i in range(24) %}
+      {% set data_idx = current_idx + i %}
+      {% if data_idx < full_list | length %}
+        {% set raw_h = full_list[data_idx] %}
+        {% set h_val = (raw_h.value if raw_h is mapping else raw_h) | float(0) * multiplier %}
+        {% set h_color = colors[0].c %}
+        {% if h_val >= colors[-1].p %}
+          {% set h_color = colors[-1].c %}
+        {% else %}
+          {% set h_low = colors | selectattr('p', 'le', h_val) | list | last %}
+          {% set h_color = h_low.c if h_low is defined else colors[0].c %}
+        {% endif %}
+        {% set ns_draw.pixels = ns_draw.pixels + [{"dp": [8 + i, 7, h_color]}] %}
+      {% endif %}
+    {% endfor %}
+
+    {{ 
+      {
+        "text": price ~ unit_text,
+        "icon": icon_id | string,
+        "duration": duration_time | int,
+        "color": current_color,
+        "textCase": 2,
+        "lifetimeMode": 1,
+        "draw": ns_draw.pixels
+      } | to_json
+    }}
+
+action:
+  - repeat:
+      for_each: "{{ devices_topics }}"
+      sequence:
+        - service: mqtt.publish
+          data:
+            topic: "{{ repeat.item }}"
+            payload: "{{ final_payload }}"
