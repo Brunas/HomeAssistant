@@ -12,88 +12,7 @@ blueprint:
     * **Precision Indexing:** Uses a mathematical offset (Hour x 4 + Minute / 15) to ensure the display perfectly syncs with the current 15-minute billing slot.
     * **Efficient MQTT Handling:** Pre-calculates the entire JSON payload as a single string to avoid Home Assistant template errors.
 
-    Following template sensors need to be defined to retrieve Nordpool prices in 15-minute intervals:
-
-    ```yaml
-    template:
-      - trigger:
-          - platform: time_pattern
-            hours: "/1"
-          - platform: homeassistant
-            event: start
-        action:
-          - action: nordpool.get_prices_for_date
-            data:
-              config_entry: "Your_Config_Entry_ID"
-              date: "{{ now().date() }}"
-            response_variable: today_raw
-          - action: nordpool.get_prices_for_date
-            data:
-              config_entry: "Your_Config_Entry_ID"
-              date: "{{ (now() + timedelta(days=1)).date() }}"
-            response_variable: tomorrow_raw
-        sensor:
-          - name: "Electricity Prices Today"
-            unique_id: "electricity_prices_today"
-            state: "{{ now().strftime('%Y-%m-%d') }}"
-            attributes:
-              prices: >
-                {% set day_m = 0.15409 %}
-                {% set night_m = 0.09601 %}
-                {% set ns = namespace(items=[]) %}
-                {% set raw_list = today_raw.get('LT', []) %}
-                {% if raw_list | count > 0 %}
-                  {% for item in raw_list %}
-                    {% set dt = as_datetime(item.start) %}
-                    {% set hour = dt.hour %}
-                    {% set is_weekend = dt.isoweekday() >= 6 %}
-                    {% set base_with_vat = (item.price / 1000) * 1.21 %}
-                    {% if is_weekend %}
-                      {% set p = base_with_vat + night_m %}
-                    {% else %}
-                      {% if hour >= 7 and hour < 22 %}
-                        {% set p = base_with_vat + day_m %}
-                      {% else %}
-                        {% set p = base_with_vat + night_m %}
-                      {% endif %}
-                    {% endif %}
-                    {% set ns.items = ns.items + [p | round(3)] %}
-                  {% endfor %}
-                {% endif %}
-                {{ ns.items }}
-          - name: "Electricity Prices Tomorrow"
-            unique_id: "electricity_prices_tomorrow"
-            state: "{{ (now() + timedelta(days=1)).strftime('%Y-%m-%d') }}"
-            attributes:
-              prices: >
-                {% set day_m = 0.15409 %}
-                {% set night_m = 0.09601 %}
-                {% set ns = namespace(items=[]) %}
-                {% set raw_list = tomorrow_raw.get('LT', []) %}
-
-                {% if raw_list | count > 0 %}
-                  {% for item in raw_list %}
-                    {% set dt = as_datetime(item.start) %}
-                    {% set hour = dt.hour %}
-                    {% set is_weekend = dt.isoweekday() >= 6 %}
-                    {% set base_with_vat = (item.price / 1000) * 1.21 %}
-                    
-                    {% if is_weekend %}
-                      {% set p = base_with_vat + night_m %}
-                    {% else %}
-                      {% if hour >= 7 and hour < 22 %}
-                        {% set p = base_with_vat + day_m %}
-                      {% else %}
-                        {% set p = base_with_vat + night_m %}
-                      {% endif %}
-                    {% endif %}
-                    {% set ns.items = ns.items + [p | round(3)] %}
-                  {% endfor %}
-                {% endif %}
-                {{ ns.items }}
-
-    ```
-    Based on an outdated Nordpool blueprint.
+    More details about required Jinja2 macro, template sensors used in this blueprint can be found in the [README](https://github.com/Brunas/HomeAssistant?tab=readme-ov-file#awtrix-electricity-prices)
   domain: automation
   author: "Brunas"
   input:
@@ -200,10 +119,8 @@ variables:
     {% set tom_list = state_attr(tomorrow_id, price_attr) or [] %}
     {% set full_list = today_list + tom_list %}
 
-    {# Precise Indexing: 4 intervals per hour #}
     {% set current_idx = (now().hour * 4) + (now().minute // 15) | int %}
 
-    {# Pulling data from the calculated index #}
     {% set raw_now = full_list[current_idx] if current_idx < full_list | length else 0 %}
     {% set val_now = (raw_now.value if raw_now is mapping else raw_now) | float(0) %}
     {% set price = (val_now * multiplier) | round(2) %}

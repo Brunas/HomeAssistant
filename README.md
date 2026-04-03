@@ -20,13 +20,58 @@ This blueprint displays real-time electricity prices on an AWTRIX lite clock wit
 * **Precision Indexing:** Uses a mathematical offset $(Hour \times 4 + Minute \div 15)$ to ensure the display perfectly syncs with the current 15-minute billing slot.
 * **Efficient MQTT Handling:** Pre-calculates the entire JSON payload as a single string to avoid Home Assistant template errors.
 
-Following template sensors need to be defined to retrieve Nordpool prices in 15-minute intervals:
+### Jinja2 macro
+
+Following jinja macro is required to keep electricity price calculation in one place:
+
+1. Change `0.15409`, `0.09601` and `1.21` to your providers daylight margin, night margin and VAT multiplier respectively.
+
+>**NOTE**: Margins include VAT already.
+
+1. In Lithuania night tariff in Summer is from midnight to 8:00, when in Winter it's from 23:00 to 7:00 - change that if it's different for you.
+
+2. Place it in `/config/custom_templates/electricity.jinja`.
+
+```jinja
+{# /config/custom_templates/electricity.jinja #}
+
+{% macro calculate_electricity_price(raw_price, dt) %}
+  {# 1. Setup Constants #}
+  {% set vat = 1.21 %}
+  {% set day_m = 0.15409 %}
+  {% set night_m = 0.09601 %}
+
+  {# 2. Convert raw MWh to kWh and add VAT #}
+  {% set price_with_vat = (raw_price / 1000) * vat %}
+
+  {# 3. Determine Time Context from the provided datetime #}
+  {% set local_dt = dt | as_local %}
+  {% set hour = local_dt.hour %}
+  {% set is_weekend = local_dt.isoweekday() >= 6 %}
+  {% set is_summer = local_dt.timetuple().tm_isdst > 0 %}
+
+  {# 4. Apply Tariff Logic #}
+  {% if is_weekend %}
+    {{ (price_with_vat + night_m) | round(3) }}
+  {% else %}
+    {% if is_summer %}
+      {# Summer: Night 00:00 - 08:00 #}
+      {{ (price_with_vat + (night_m if hour < 8 else day_m)) | round(3) }}
+    {% else %}
+      {# Winter: Day 07:00 - 23:00 #}
+      {{ (price_with_vat + (day_m if (hour >= 7 and hour < 23) else night_m)) | round(3) }}
+    {% endif %}
+  {% endif %}
+{% endmacro %}
+```
+
+### Template sensors
+
+Following template sensors need to be defined to retrieve Nordpool prices in 15-minute intervals with suplemental Current 15-minute Price and Current Hourly Price sensors at the bottom:
 
 1. Get YOUR_CONFIG_ENTRY_ID in developer tools while trying to execute `nordpool.get_prices_for_date` and turning on YAML view
 
-2. Change `0.15409`, `0.09601` and `1.21` to your providers daylight margin, night margin and VAT multiplier respectively. 
-
->**NOTE**: Margins include VAT already.
+2. `sensor.nord_pool_lt_dabartine_kaina` change to your NordPool integration current price sensor - it's returning hourly price.
 
 ```yaml
 template:
@@ -37,74 +82,76 @@ template:
         event: start
     action:
         - action: nordpool.get_prices_for_date
-        data:
+            data:
             config_entry: "YOUR_CONFIG_ENTRY_ID"
             date: "{{ now().date() }}"
-        response_variable: today_raw
+            response_variable: today_raw
         - action: nordpool.get_prices_for_date
         data:
             config_entry: "YOUR_CONFIG_ENTRY_ID"
             date: "{{ (now() + timedelta(days=1)).date() }}"
-        response_variable: tomorrow_raw
+            response_variable: tomorrow_raw
     sensor:
         - name: "Electricity Prices Today"
         unique_id: "electricity_prices_today"
         state: "{{ now().strftime('%Y-%m-%d') }}"
         attributes:
             prices: >
-            {% set day_m = 0.15409 %}
-            {% set night_m = 0.09601 %}
-            {% set ns = namespace(items=[]) %}
-            {% set raw_list = today_raw.get('LT', []) %}
-            {% if raw_list | count > 0 %}
-                {% for item in raw_list %}
-                {% set dt = as_datetime(item.start) %}
-                {% set hour = dt.hour %}
-                {% set is_weekend = dt.isoweekday() >= 6 %}
-                {% set base_with_vat = (item.price / 1000) * 1.21 %}
-                {% if is_weekend %}
-                    {% set p = base_with_vat + night_m %}
-                {% else %}
-                    {% if hour >= 7 and hour < 22 %}
-                    {% set p = base_with_vat + day_m %}
-                    {% else %}
-                    {% set p = base_with_vat + night_m %}
-                    {% endif %}
+                {% from 'electricity.jinja' import calculate_electricity_price %}
+                {% set ns = namespace(items=[]) %}
+                {% set raw_list = today_raw.get('LT', []) %}
+
+                {% if raw_list | count > 0 %}
+                    {% for item in raw_list %}
+                    {# We pass the raw price and the start time to the macro #}
+                    {% set final_p = calculate_electricity_price(item.price, as_datetime(item.start)) %}
+                    {% set ns.items = ns.items + [final_p | float] %}
+                    {% endfor %}
                 {% endif %}
-                {% set ns.items = ns.items + [p | round(3)] %}
-                {% endfor %}
-            {% endif %}
-            {{ ns.items }}
+                {{ ns.items }}
         - name: "Electricity Prices Tomorrow"
         unique_id: "electricity_prices_tomorrow"
         state: "{{ (now() + timedelta(days=1)).strftime('%Y-%m-%d') }}"
         attributes:
             prices: >
-            {% set day_m = 0.15409 %}
-            {% set night_m = 0.09601 %}
-            {% set ns = namespace(items=[]) %}
-            {% set raw_list = tomorrow_raw.get('LT', []) %}
+                {% from 'electricity.jinja' import calculate_electricity_price %}
+                {% set ns = namespace(items=[]) %}
+                {% set raw_list = tomorrow_raw.get('LT', []) %}
 
-            {% if raw_list | count > 0 %}
-                {% for item in raw_list %}
-                {% set dt = as_datetime(item.start) %}
-                {% set hour = dt.hour %}
-                {% set is_weekend = dt.isoweekday() >= 6 %}
-                {% set base_with_vat = (item.price / 1000) * 1.21 %}
-                
-                {% if is_weekend %}
-                    {% set p = base_with_vat + night_m %}
-                {% else %}
-                    {% if hour >= 7 and hour < 22 %}
-                    {% set p = base_with_vat + day_m %}
-                    {% else %}
-                    {% set p = base_with_vat + night_m %}
-                    {% endif %}
+                {% if raw_list | count > 0 %}
+                    {% for item in raw_list %}
+                    {# We pass the raw price and the start time to the macro #}
+                    {% set final_p = calculate_electricity_price(item.price, as_datetime(item.start)) %}
+                    {% set ns.items = ns.items + [final_p | float] %}
+                    {% endfor %}
                 {% endif %}
-                {% set ns.items = ns.items + [p | round(3)] %}
-                {% endfor %}
-            {% endif %}
-            {{ ns.items }}
+                {{ ns.items }}
+
+    - sensor:
+        - name: "Current Hourly Electricity Price with Tariffs"
+        unique_id: "sensor.current_hourly_electricity_price_with_tariffs"
+        unit_of_measurement: "EUR/kWh"
+        state: >
+            {% from 'electricity.jinja' import calculate_electricity_price %}
+            {# Get the current raw hourly price from Nordpool #}
+            {% set raw = states('sensor.nord_pool_lt_dabartine_kaina') | float(0) %}
+            {# If the hourly sensor is in EUR/kWh already, multiply by 1000 to feed the macro #}
+            {{ calculate_electricity_price(raw * 1000, now()) }}
+
+    - sensor:
+        - name: "Current 15min Electricity Price with Tariffs"
+        unique_id: "sensor.current_15min_electricity_price_with_tariffs"
+        unit_of_measurement: "EUR/kWh"
+        state: >
+            {% set prices = state_attr('sensor.electricity_prices_today', 'prices') %}
+            {% if prices and prices | length >= 96 %}
+                {# Calculate current 15-min index (0-95) #}
+                {% set idx = (now().hour * 4) + (now().minute // 15) %}
+                {{ prices[idx] | float(0) | round(3) }}
+            {% else %}
+                {# Fallback to the hourly sensor only if the 15-min list isn't ready #}
+                {{ states('sensor.current_hourly_electricity_price_with_tariffs') }}
+            {% endif %}                 
 
 ```
 
