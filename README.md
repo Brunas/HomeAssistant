@@ -26,11 +26,12 @@ Following jinja macro is required to keep electricity price calculation in one p
 
 1. Change `0.15409`, `0.09601` and `1.21` to your providers daylight margin, night margin and VAT multiplier respectively.
 
+2. In Lithuania night tariff in Summer is from midnight to 8:00, when in Winter it's from 23:00 to 7:00 - change that if it's different for you.
+
+3. Place it in `/config/custom_templates/electricity.jinja`.
+
 >**NOTE**: Margins include VAT already.
 
-1. In Lithuania night tariff in Summer is from midnight to 8:00, when in Winter it's from 23:00 to 7:00 - change that if it's different for you.
-
-2. Place it in `/config/custom_templates/electricity.jinja`.
 
 ```jinja
 {# /config/custom_templates/electricity.jinja #}
